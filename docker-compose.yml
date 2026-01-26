@@ -17,31 +17,17 @@ services:
   # ---------------------------------------------------------------------------
   # ChromaDB - Vector Database
   # ---------------------------------------------------------------------------
-  # Must start before backend (backend depends on it)
-  # Data persisted in Docker volume
   chromadb:
     image: chromadb/chroma:latest
     container_name: rag_chromadb
-    # Expose ChromaDB on port 8001 (8000 is used by backend)
     ports:
       - "8001:8000"
     volumes:
-      # Persist ChromaDB data between container restarts
-      # Named volume "chroma_data" is managed by Docker
       - chroma_data:/chroma/chroma
     environment:
-      # Allow connections from other containers
       - IS_PERSISTENT=TRUE
       - ANONYMIZED_TELEMETRY=FALSE
-    # Restart automatically if it crashes
     restart: unless-stopped
-    # Health check - ChromaDB has a heartbeat endpoint
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
 
   # ---------------------------------------------------------------------------
   # Backend - FastAPI Application
@@ -54,27 +40,19 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # ChromaDB connection (container name = hostname in Docker network)
       - CHROMA_HOST=chromadb
       - CHROMA_PORT=8000
-      # These will be overridden by .env file or CI/CD
       - DATABASE_URL=${DATABASE_URL}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-    # Load additional env vars from .env file
     env_file:
       - .env
-    # Wait for ChromaDB to be healthy before starting
     depends_on:
-      chromadb:
-        condition: service_healthy
+      - chromadb
     restart: unless-stopped
 
 # -----------------------------------------------------------------------------
 # Volumes
 # -----------------------------------------------------------------------------
-# Named volumes persist data even when containers are removed
-# Run "docker volume ls" to see all volumes
-# Run "docker volume rm rag_react_backend_chroma_data" to delete
 volumes:
   chroma_data:
     name: rag_chroma_data

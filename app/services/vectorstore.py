@@ -22,6 +22,7 @@ load_dotenv()
 
 CHROMA_HOST = os.getenv("CHROMA_HOST")
 CHROMA_PORT = os.getenv("CHROMA_PORT", "8000")
+CHROMA_SSL = os.getenv("CHROMA_SSL", "false").lower() == "true"
 
 
 def get_chroma_client():
@@ -32,11 +33,14 @@ def get_chroma_client():
     - Otherwise: Use PersistentClient (for local development)
     """
     if CHROMA_HOST:
-        # Production: Connect to ChromaDB server via HTTP
-        print(f"Connecting to ChromaDB at {CHROMA_HOST}:{CHROMA_PORT}")
+        # Production: Connect to ChromaDB server via HTTP/HTTPS
+        use_ssl = CHROMA_SSL or ".railway.app" in CHROMA_HOST
+        port = int(CHROMA_PORT) if not use_ssl else 443
+        print(f"Connecting to ChromaDB at {CHROMA_HOST}:{port} (SSL: {use_ssl})")
         return chromadb.HttpClient(
             host=CHROMA_HOST,
-            port=int(CHROMA_PORT),
+            port=port,
+            ssl=use_ssl,
             settings=Settings(
                 anonymized_telemetry=False  # Disable telemetry
             )

@@ -1,0 +1,72 @@
+# =============================================================================
+# GitHub Actions CI/CD Pipeline
+# =============================================================================
+# This workflow deploys the backend to EC2 whenever you push to main
+#
+# How it works:
+# 1. Trigger: Push to main branch
+# 2. SSH into EC2
+# 3. Pull latest code from GitHub
+# 4. Rebuild and restart Docker containers
+
+name: Deploy to EC2
+
+# When to run this workflow
+on:
+  push:
+    branches:
+      - main
+  # Allow manual trigger from GitHub UI
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout code (needed for docker-compose file)
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Deploy to EC2 via SSH
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Navigate to app directory (create if doesn't exist)
+            mkdir -p ~/rag-react
+            cd ~/rag-react
+
+            # Clone or pull latest code
+            if [ -d ".git" ]; then
+              echo "Pulling latest code..."
+              git pull origin main
+            else
+              echo "Cloning repository..."
+              git clone https://github.com/${{ github.repository }}.git .
+            fi
+
+            # Create .env file from secrets
+            echo "Creating .env file..."
+            cat > .env << EOF
+            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
+            CHROMA_HOST=chromadb
+            CHROMA_PORT=8000
+            EOF
+
+            # Stop existing containers
+            echo "Stopping existing containers..."
+            docker-compose down || true
+
+            # Build and start containers
+            echo "Building and starting containers..."
+            docker-compose up -d --build
+
+            # Show status
+            echo "Deployment complete! Container status:"
+            docker-compose ps

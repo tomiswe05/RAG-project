@@ -24,7 +24,7 @@ def process_all_documents(directory: str, chunk_size: int = 500) -> list[dict]:
         # Step 3: Extract metadata (from raw content)
         metadata = extract_metadata(doc["content"], doc["source"])
 
-        # Step 4: Chunk the cleaned content
+        # Step 4: Chunk the cleaned content1
         chunks = chunk_document(cleaned, chunk_size=chunk_size)
 
         # Step 5: Attach metadata to each chunk

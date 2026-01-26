@@ -65,3 +65,28 @@ app.include_router(conversations_router, prefix="/api", tags=["conversations"])
 def root():
     """Health check endpoint."""
     return {"message": "React Docs RAG API is running"}
+
+
+@app.get("/api/admin/index")
+def run_indexing():
+    """
+    Trigger document indexing.
+    WARNING: This clears existing data and re-indexes everything.
+    """
+    from app.processing.pipeline import process_all_documents
+    from app.services.embeddings import embed_chunks
+    from app.services.vectorstore import add_chunks, clear_collection
+
+    # Clear existing data
+    clear_collection()
+
+    # Process documents
+    chunks = process_all_documents("data/learn")
+
+    # Generate embeddings
+    chunks = embed_chunks(chunks)
+
+    # Store in ChromaDB
+    add_chunks(chunks)
+
+    return {"message": f"Indexed {len(chunks)} chunks successfully"}

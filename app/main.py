@@ -73,20 +73,33 @@ def run_indexing():
     Trigger document indexing.
     WARNING: This clears existing data and re-indexes everything.
     """
-    from app.processing.pipeline import process_all_documents
-    from app.services.embeddings import embed_chunks
-    from app.services.vectorstore import add_chunks, clear_collection
+    try:
+        import os
+        from app.processing.pipeline import process_all_documents
+        from app.services.embeddings import embed_chunks
+        from app.services.vectorstore import add_chunks, clear_collection
 
-    # Clear existing data
-    clear_collection()
+        # Check if data folder exists
+        data_path = "data/learn"
+        if not os.path.exists(data_path):
+            return {"error": f"Data path '{data_path}' does not exist", "cwd": os.getcwd(), "files": os.listdir(".")}
 
-    # Process documents
-    chunks = process_all_documents("data/learn")
+        # Clear existing data
+        clear_collection()
 
-    # Generate embeddings
-    chunks = embed_chunks(chunks)
+        # Process documents
+        chunks = process_all_documents(data_path)
 
-    # Store in ChromaDB
-    add_chunks(chunks)
+        if not chunks:
+            return {"error": "No chunks created", "data_path": data_path}
 
-    return {"message": f"Indexed {len(chunks)} chunks successfully"}
+        # Generate embeddings
+        chunks = embed_chunks(chunks)
+
+        # Store in ChromaDB
+        add_chunks(chunks)
+
+        return {"message": f"Indexed {len(chunks)} chunks successfully"}
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "traceback": traceback.format_exc()}

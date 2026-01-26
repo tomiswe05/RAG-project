@@ -14,6 +14,10 @@ def _load_bm25_index():
     ids = all_data["ids"]
     metadatas = all_data["metadatas"]
 
+    # Handle empty collection gracefully
+    if not documents:
+        return None, [], [], []
+
     # Tokenize documents (split into words)
     tokenized = [doc.lower().split() for doc in documents]
 
@@ -29,6 +33,10 @@ bm25_index, all_documents, all_ids, all_metadatas = _load_bm25_index()
 
 def bm25_search(query: str, top_k: int = 5) -> list[dict]:
     """Search using BM25 keyword matching."""
+
+    # Return empty results if no documents indexed
+    if bm25_index is None:
+        return []
 
     # Tokenize query
     query_tokens = query.lower().split()
@@ -65,15 +73,16 @@ def vector_search(query: str, top_k: int = 5) -> list[dict]:
         include=["documents", "metadatas", "distances"]
     )
 
-    # Step 3: Format results
+    # Step 3: Format results (handle empty collection)
     formatted = []
-    for i in range(len(results["ids"][0])):
-        formatted.append({
-            "id": results["ids"][0][i],
-            "content": results["documents"][0][i],
-            "metadata": results["metadatas"][0][i],
-            "distance": results["distances"][0][i]
-        })
+    if results["ids"] and results["ids"][0]:
+        for i in range(len(results["ids"][0])):
+            formatted.append({
+                "id": results["ids"][0][i],
+                "content": results["documents"][0][i],
+                "metadata": results["metadatas"][0][i],
+                "distance": results["distances"][0][i]
+            })
 
     return formatted
 

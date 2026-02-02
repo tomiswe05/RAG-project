@@ -1,6 +1,10 @@
 # Environment variables (contains secrets!)
 .env
 
+# Firebase service account key
+serviceAccountKey.json
+*-firebase-adminsdk-*.json
+
 # Python
 __pycache__/
 *.py[cod]

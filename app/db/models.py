@@ -34,9 +34,8 @@ class Conversation(Base):
     # nullable=False means this field is required
     title = Column(String(255), nullable=False, default="New Chat")
 
-    # For future user authentication - nullable for now
-    # When we add users, we'll set this to the user's ID
-    user_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+    # Firebase user ID (string like "abc123xyz")
+    user_id = Column(String(128), nullable=True, index=True)
 
     # Timestamps for sorting and display
     # default=datetime.utcnow sets the value when row is created

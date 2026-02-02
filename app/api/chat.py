@@ -19,6 +19,7 @@ from app.db.models import Conversation, Message
 from app.db.schemas import ChatRequest, ChatResponse, SourceInfo
 from app.services.retrieval import hybrid_search
 from app.services.llm import generate_answer
+from app.auth import get_current_user
 
 router = APIRouter()
 
@@ -42,7 +43,8 @@ def generate_title_from_question(question: str, max_length: int = 50) -> str:
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
     request: ChatRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Receive a question, search for relevant chunks, generate answer.
@@ -55,10 +57,15 @@ async def chat(
 
     conversation = None
 
+    uid = current_user["uid"]
+
     # Step 1: Get or create conversation
     if request.conversation_id:
-        # Load existing conversation
-        query = select(Conversation).where(Conversation.id == request.conversation_id)
+        # Load existing conversation - scoped to current user
+        query = select(Conversation).where(
+            Conversation.id == request.conversation_id,
+            Conversation.user_id == uid,
+        )
         result = await db.execute(query)
         conversation = result.scalar_one_or_none()
 
@@ -70,7 +77,7 @@ async def chat(
     else:
         # Create new conversation with title from question
         title = generate_title_from_question(request.question)
-        conversation = Conversation(title=title)
+        conversation = Conversation(title=title, user_id=uid)
         db.add(conversation)
         await db.flush()  # Generates the ID without committing
 

@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.chat import router as chat_router
 from app.api.conversations import router as conversations_router
 from app.db.database import init_db
+from app.auth import init_firebase
 
 
 @asynccontextmanager
@@ -25,6 +26,10 @@ async def lifespan(app: FastAPI):
     Code before 'yield' runs on startup.
     Code after 'yield' runs on shutdown.
     """
+    # Startup: Initialize Firebase Auth
+    print("Initializing Firebase...")
+    init_firebase()
+
     # Startup: Create database tables if they don't exist
     print("Initializing database...")
     await init_db()

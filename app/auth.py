@@ -15,6 +15,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 # Security scheme - extracts Bearer token from Authorization header
 security = HTTPBearer()
+optional_security = HTTPBearer(auto_error=False)
 
 
 def init_firebase():
@@ -84,3 +85,23 @@ async def get_current_user(
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+async def get_optional_user(
+    credentials: HTTPAuthorizationCredentials = Depends(optional_security),
+) -> dict | None:
+    """
+    Optional auth dependency. Returns decoded token if valid, None if no token.
+
+    Use this for endpoints that work for both anonymous and authenticated users.
+    """
+    if credentials is None:
+        return None
+
+    token = credentials.credentials
+
+    try:
+        decoded_token = auth.verify_id_token(token)
+        return decoded_token
+    except Exception:
+        return None

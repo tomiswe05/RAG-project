@@ -19,7 +19,7 @@ from app.db.models import Conversation, Message
 from app.db.schemas import ChatRequest, ChatResponse, SourceInfo
 from app.services.retrieval import hybrid_search
 from app.services.llm import generate_answer
-from app.auth import get_current_user
+from app.auth import get_optional_user
 
 router = APIRouter()
 
@@ -44,65 +44,62 @@ def generate_title_from_question(question: str, max_length: int = 50) -> str:
 async def chat(
     request: ChatRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict | None = Depends(get_optional_user),
 ):
     """
     Receive a question, search for relevant chunks, generate answer.
 
-    If conversation_id is provided, adds messages to existing conversation.
-    If not provided, creates a new conversation.
-
-    The conversation_id is returned so the frontend can continue the conversation.
+    - Authenticated users: conversation is saved to DB
+    - Anonymous users: answer is returned without saving
     """
 
+    is_authenticated = current_user is not None
+    uid = current_user["uid"] if is_authenticated else None
     conversation = None
 
-    uid = current_user["uid"]
-
-    # Step 1: Get or create conversation
-    if request.conversation_id:
-        # Load existing conversation - scoped to current user
-        query = select(Conversation).where(
-            Conversation.id == request.conversation_id,
-            Conversation.user_id == uid,
-        )
-        result = await db.execute(query)
-        conversation = result.scalar_one_or_none()
-
-        if not conversation:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Conversation {request.conversation_id} not found"
+    # Step 1: Get or create conversation (only for authenticated users)
+    if is_authenticated:
+        if request.conversation_id:
+            query = select(Conversation).where(
+                Conversation.id == request.conversation_id,
+                Conversation.user_id == uid,
             )
-    else:
-        # Create new conversation with title from question
-        title = generate_title_from_question(request.question)
-        conversation = Conversation(title=title, user_id=uid)
-        db.add(conversation)
-        await db.flush()  # Generates the ID without committing
+            result = await db.execute(query)
+            conversation = result.scalar_one_or_none()
 
-    # Step 2: Save user message
-    user_message = Message(
-        conversation_id=conversation.id,
-        role="user",
-        content=request.question
-    )
-    db.add(user_message)
+            if not conversation:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Conversation {request.conversation_id} not found"
+                )
+        else:
+            title = generate_title_from_question(request.question)
+            conversation = Conversation(title=title, user_id=uid)
+            db.add(conversation)
+            await db.flush()
 
-    # Step 3: Retrieve relevant chunks using hybrid search
+        # Save user message
+        user_message = Message(
+            conversation_id=conversation.id,
+            role="user",
+            content=request.question
+        )
+        db.add(user_message)
+
+    # Step 2: Retrieve relevant chunks using hybrid search
     results = hybrid_search(
         query=request.question,
         top_k=request.top_k,
         filter=request.filter
     )
 
-    # Step 4: Generate answer using LLM
+    # Step 3: Generate answer using LLM
     answer = generate_answer(
         question=request.question,
         context_chunks=results
     )
 
-    # Step 5: Extract sources for response
+    # Step 4: Extract sources for response
     sources = [
         SourceInfo(
             title=r["metadata"].get("title", "Unknown"),
@@ -111,24 +108,20 @@ async def chat(
         for r in results
     ]
 
-    # Step 6: Save assistant message with sources
-    assistant_message = Message(
-        conversation_id=conversation.id,
-        role="assistant",
-        content=answer,
-        sources=[s.model_dump() for s in sources]  # Convert Pydantic to dict for JSON storage
-    )
-    db.add(assistant_message)
+    # Step 5: Save assistant message (only for authenticated users)
+    if is_authenticated and conversation:
+        assistant_message = Message(
+            conversation_id=conversation.id,
+            role="assistant",
+            content=answer,
+            sources=[s.model_dump() for s in sources]
+        )
+        db.add(assistant_message)
+        conversation.updated_at = datetime.utcnow()
+        await db.commit()
 
-    # Step 7: Update conversation's updated_at timestamp
-    conversation.updated_at = datetime.utcnow()
-
-    # Step 8: Commit all changes
-    await db.commit()
-
-    # Return response with conversation_id
     return ChatResponse(
-        conversation_id=conversation.id,
+        conversation_id=conversation.id if conversation else None,
         question=request.question,
         answer=answer,
         sources=sources

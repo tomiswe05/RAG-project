@@ -155,8 +155,9 @@ class ChatResponse(BaseModel):
     """
     Schema for the POST /api/chat response.
     Now includes conversation_id so frontend can continue the conversation.
+    conversation_id is null for anonymous (unauthenticated) users.
     """
-    conversation_id: UUID = Field(..., description="ID of the conversation (new or existing)")
+    conversation_id: Optional[UUID] = Field(default=None, description="ID of the conversation (null for anonymous users)")
     question: str
     answer: str
     sources: list[SourceInfo]
